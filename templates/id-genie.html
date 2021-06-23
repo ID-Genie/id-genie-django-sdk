@@ -1,0 +1,47 @@
+<html>
+  <head>
+   <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script> 
+  </head>
+  <body>
+    This is ID Genie.
+    <button id="send-push"> Send a push </button>
+    <button> Cancel Login </button> 
+  </body>
+  <script>
+    $(document).ready(function() {
+        const chatSocket = new WebSocket(
+            'ws://'
+            + 'localhost:8000'
+            + '/ws/mfa/'
+            + '{{ request.GET.code }}'
+            + '/'
+        );
+
+      chatSocket.onmessage = function(message){
+        console.log('websocket ', message);
+        if (JSON.parse(message.data).message === "true")
+          $.ajax({
+            type: 'POST',
+            url: "/idgenie/validate/",
+            data: { session: '{{ request.GET.code }}' },
+            headers: {'X-CSRFToken': '{{ csrf_token }}'},
+            success: function(data){
+              console.log('all looks clean' , data);
+              window.location.replace("{% url 'login' %}");
+            }
+          });
+      };
+
+      $('#send-push').click(function(e){
+        $.ajax({
+url: "/idgenie/send-push/", 
+          type: 'post',
+          data: {user: 'test', code: '{{ request.GET.code }}'},
+          headers: {'X-CSRFToken': '{{ csrf_token }}'},
+          success: function(data){
+            console.log("MFA pushed ", data);
+          }});
+      })
+    })
+  </script>
+</html>
