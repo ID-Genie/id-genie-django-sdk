@@ -1,25 +1,65 @@
-<html>
+<html >
   <head>
    <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script> 
+   <script src="https://cdn.jsdelivr.net/gh/davidshimjs/qrcodejs/qrcode.min.js"> </script>
+   <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh" crossorigin="anonymous">
   </head>
-  <body>
-    This is ID Genie.
-    <button id="send-push"> Send a push </button>
-    <button> Cancel Login </button> 
+  <body class="container mt-4">
+    <div class="row ">
+      <div class="col">
+        <div class="jumbotron my-auto">
+          <h3 class="display-6">IDGenie MFA </h1>
+          {% if 'new_user' in request.GET %}
+          {% ifequal request.GET.new_user 'True' %}
+          <p> Please scan the following code on your mobile app to enroll and login into our services </p>
+          <div class="d-block ml-4" id="qrcode"> </div>
+          <p class="mt-2"> If you are on a mobile device with IDGenie app installed, please click on this link: <span id='mfa-deeplink'> </span></p>
+          {% endifequal %}
+
+          {% else %}
+
+          <div>This is ID Genie and ACME Corp having fun together.</div>
+          <div class="mt-4">
+            <button id="send-push" class="btn btn-primary"> Send a push </button>
+            <button id="send-push-done" class="btn btn-primary d-none">Push sent
+              <div class="spinner-border spinner-border-sm" role="status" >
+                <span class="sr-only">Loading...</span>
+              </div>
+            </button>
+
+            <button id="cancel-session" class="btn btn-light"> Cancel Login </button> 
+          </div>
+
+          {% endif %}
+
+        </div>
+      </div>
+    </div>
   </body>
   <script>
     $(document).ready(function() {
-        const chatSocket = new WebSocket(
+      const mfa_signup_url = "https://www.idgenie.de/enroll?a={{request.GET.rp}}&t={{request.GET.code}}"
+      if (document.getElementById('qrcode')){
+        new QRCode(document.getElementById("qrcode"), mfa_signup_url);
+        var a = document.createElement('a');
+        var deeplink = document.createTextNode(mfa_signup_url);
+        a.appendChild(deeplink);
+        a.title = deeplink;
+        a.href = deeplink;
+        document.getElementById('mfa-deeplink').appendChild(a);
+      }
+
+      const chatSocket = new WebSocket(
             'ws://'
-            + 'localhost:8000'
+            + 'api.idgenie.de'
             + '/ws/mfa/'
             + '{{ request.GET.code }}'
             + '/'
         );
 
       chatSocket.onmessage = function(message){
-        console.log('websocket ', message);
-        if (JSON.parse(message.data).message === "true")
+        console.log('websocket ', JSON.parse(message.data).message );
+        if (JSON.parse(message.data).message === "True")
           $.ajax({
             type: 'POST',
             url: "/idgenie/validate/",
@@ -32,14 +72,28 @@
           });
       };
 
+      $('#cancel-session').click(function(e){
+        $.ajax({
+url: "/idgenie/cancel-session/", 
+          type: 'post',
+          data: {code: '{{ request.GET.code }}'},
+          headers: {'X-CSRFToken': '{{ csrf_token }}'},
+          success: function(data){
+            console.log("Session deleted", data);
+            window.location.replace("/");
+          }});
+      })
+
       $('#send-push').click(function(e){
         $.ajax({
 url: "/idgenie/send-push/", 
           type: 'post',
-          data: {user: 'test', code: '{{ request.GET.code }}'},
+          data: {session_id: '{{ request.GET.code }}'},
           headers: {'X-CSRFToken': '{{ csrf_token }}'},
           success: function(data){
-            console.log("MFA pushed ", data);
+            $('#send-push').addClass('d-none');
+            $('#send-push-done').removeClass('d-none');
+            console.log("MFA pushed ");
           }});
       })
     })
